@@ -35,26 +35,27 @@
 
 禁止一次抛出一大堆思考与实现。
 
-## 组成（v2 共四个交付单元）
+## 组成
 
 | 单元 | 位置 | 作用 |
 | --- | --- | --- |
-| preset 组成+persona | `${DSH_HOME}/.agent-presets/apb-coding/` | 模式语义、渐进纪律、挂载 apb-mode 行 |
-| host 插件 `@deepseek-ai/dsh-apb-mode` | `profiles/node_modules/@deepseek-ai/dsh-apb-mode/` | 状态机、`/apb` 命令、权限联动、apbMode 投影、模式 section |
-| client 插件 `@deepseek-ai/dsh-client-ui-apb-mode` | `profiles/node_modules/@deepseek-ai/dsh-client-ui-apb-mode/` | composer chip + Alt+M（读 apbMode 投影，数据驱动显隐） |
-| profile 组合行 | `profiles/web/cordis.patch.yml` | 把 client 插件注册进 web 组合 |
+| profile bundle `@deepseek-ai/dsh-apb` | profile 的 pnpm 依赖与 `dsh.profile.bundles` | 统一挂载 host 状态机和 client UI |
+| preset 组成+persona | `${DSH_HOME}/.agent-presets/apb-coding/` | 模式语义与渐进纪律 |
+| profile 用户 patch | `${DSH_HOME}/profiles/web/cordis.patch.yml` | 用户自己的覆盖层，不由 APB 安装器编辑 |
 
 `enabled` 数据驱动可见性：client 只在本会话 `agent-preset/selected = apb-coding` 时
 渲染 chip / 监听 Alt+M；其他预设会话不显示、不响应。
 
 ## 安装位置与使用
 
-- preset：`${DSH_HOME:-$HOME/.dsh}/.agent-presets/apb-coding/`（本机 `C:\Users\15034\.dsh\.agent-presets\apb-coding`）。
-- 插件：`${DSH_HOME}/profiles/node_modules/@deepseek-ai/dsh-apb-mode` 与 `dsh-client-ui-apb-mode`；
-  组合行在 `${DSH_HOME}/profiles/web/cordis.patch.yml`。
+- bundle：从仓库根目录执行 `dsh plugin --profile web add .`，或安装
+  `@deepseek-ai/dsh-apb` 的 registry/tarball 包；DSH 自动维护 profile manifest。
+- preset：`${DSH_HOME:-$HOME/.dsh}/.agent-presets/apb-coding/`。
 - 使用：新开会话选择 Agent 预设「APB 渐进编码助手」，输入区右侧出现 APB chip。
   默认 ask（只读）；Alt+M 或点 chip 循环 ask→plan→build→ask。
-- 注意：插件改动（含新增/编辑上述包与 patch）需**重启 DSH** 才装载生效。
+- 卸载：`dsh plugin --profile web remove @deepseek-ai/dsh-apb`。
+- 注意：bundle 改动需**重启 DSH** 才装载生效；preset 是独立对象，不由
+  `dsh plugin remove` 删除。
 
 ## 快捷键配置
 
@@ -64,18 +65,17 @@
 
 ## 迁移到其他机器
 
-迁移单元是 preset 目录 + 两个插件包 + profile 组合行，四者一并拷贝：
+插件 bundle 使用 DSH 标准方式迁移：在目标机器的目标 profile 中安装发布包或
+tarball。
 
-```sh
-# 源机器 → 目标机器相同 DSH_HOME 布局
-cp -r <DSH_HOME>/.agent-presets/apb-coding        <目标>/<DSH_HOME>/.agent-presets/
-mkdir -p <目标>/<DSH_HOME>/profiles/node_modules/@deepseek-ai
-cp -r <DSH_HOME>/profiles/node_modules/@deepseek-ai/dsh-apb-mode \
-      <目标>/<DSH_HOME>/profiles/node_modules/@deepseek-ai/
-cp -r <DSH_HOME>/profiles/node_modules/@deepseek-ai/dsh-client-ui-apb-mode \
-      <目标>/<DSH_HOME>/profiles/node_modules/@deepseek-ai/
-# profile 组合行需并入目标机器的 profiles/web/cordis.patch.yml（见该文件内注释）
+```powershell
+dsh plugin --profile web add @deepseek-ai/dsh-apb
+# 或安装本地交付包：
+dsh plugin --profile web add .\deepseek-ai-dsh-apb-<版本>.tgz
 ```
+
+bundle 的升级和卸载也必须使用 `dsh plugin update/remove`。`apb-coding` preset
+不属于 profile bundle，不能通过复制插件目录来伪造安装状态。
 
 要求：目标机器运行同一（或更新的）DSH 版本；插件依赖（cordis/zod、react、
 `dsh-*` 运行时）随 DSH 发行已存在。

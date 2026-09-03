@@ -120,7 +120,7 @@ file-policy 行判断当前模式"。
 
 | 内容 | 路径 |
 | --- | --- |
-| host 插件（本文件所在包） | `${DSH_HOME}/profiles/node_modules/@deepseek-ai/dsh-apb-mode/` |
-| client 插件 | `${DSH_HOME}/profiles/node_modules/@deepseek-ai/dsh-client-ui-apb-mode/` |
-| profile 组合行 | `${DSH_HOME}/profiles/web/cordis.patch.yml` |
+| profile bundle | `${DSH_HOME}/profiles/web/node_modules/@deepseek-ai/dsh-apb/` |
+| host/client bundle 内容 | `@deepseek-ai/dsh-apb` 的 package exports 与 `dsh.bundle.patch` |
+| profile manifest | `${DSH_HOME}/profiles/web/package.json`，由 `dsh plugin` 维护 |
 | preset（persona + 挂载行） | `${DSH_HOME}/.agent-presets/apb-coding/` |

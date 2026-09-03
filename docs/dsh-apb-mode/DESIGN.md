@@ -89,9 +89,10 @@ shipped client（如 ui-plan）是 `window.__ModuleLoader__.load({ id, factory }
 
 ## 八、可迁移性设计
 
-交付单元 = preset 目录 + 两个插件包目录 + profile 补丁行。README 记录四件套
-整体拷贝到目标机同一 DSH_HOME 布局的方法；键位 HOTKEY 集中在 client.js 顶部
-常量，冲突可改。
+交付单元分为两个 DSH 概念：profile bundle `@deepseek-ai/dsh-apb` 负责 host/client
+插件，由 `dsh plugin` 安装、升级和卸载；`apb-coding` 是独立 agent preset，负责
+persona 与渐进纪律。bundle 不直接编辑用户的 profile patch，键位 HOTKEY 集中在
+client.js 顶部常量，冲突可改。
 
 ## 九、风险与取舍备忘
 

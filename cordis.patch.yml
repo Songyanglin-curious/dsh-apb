@@ -1,0 +1,5 @@
+# The APB profile bundle. The package's dsh.client declaration exposes the
+# browser half from the same installed package through the /client export.
+- insert:
+    - id: apb-mode
+      name: '@deepseek-ai/dsh-apb'

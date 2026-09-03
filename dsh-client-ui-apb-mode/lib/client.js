@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "@deepseek-ai/dsh-client-ui-apb-mode",
+	id: "@deepseek-ai/dsh-apb",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
