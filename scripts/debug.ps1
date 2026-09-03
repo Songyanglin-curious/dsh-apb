@@ -101,14 +101,16 @@ function Write-DebugPreset {
     Copy-Item -LiteralPath $sourcePreset -Destination (Join-Path $debugPresetDir 'preset.yml') -Force
 
     $composition = Get-Content -LiteralPath $sourceComposition -Raw -Encoding UTF8
-    $legacyApbBlock = '(?ms)^# ── APB mode .*?(?=^# ── shell )'
+    # Keep this pattern ASCII-only so Windows PowerShell 5.1 can parse this
+    # BOM-less UTF-8 script regardless of the active system code page.
+    $legacyApbBlock = '(?ms)^#[^\r\n]*APB mode[^\r\n]*\r?\n.*?(?=^#[^\r\n]*shell[^\r\n]*\r?$)'
     $matches = [regex]::Matches($composition, $legacyApbBlock)
     if ($matches.Count -ne 1) {
         throw "Expected exactly one legacy APB preset block, found $($matches.Count)."
     }
 
     $replacement = @'
-# ── APB mode ────────────────────────────────────────────────────────────────
+# APB mode (provided by the profile bundle during local debugging)
 
 # Local debug copy: the host controller is mounted once by the profile bundle.
 # The source preset still contains the retired standalone package reference;

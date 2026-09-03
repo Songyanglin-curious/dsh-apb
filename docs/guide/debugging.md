@@ -71,6 +71,7 @@ preset 的挂载职责。
 
 ## 已验证范围
 
-在 DSH `0.1.1-rc.2` 上已验证脚本语法、`setup`、`status`、`start -NoOpen -Port 0`、
-Web 根页面、`/plugins/@deepseek-ai/dsh-apb/client.js` 和 `clean`。浏览器中的 chip
-交互、三模式权限和 resume/fork 仍未验收。
+在 Windows PowerShell `5.1`、PowerShell `7.6` 和 DSH `0.1.1-rc.2` 上已验证脚本
+语法、`setup`、`status`、`start -NoOpen -Port 0`、Web 根页面、
+`/plugins/@deepseek-ai/dsh-apb/client.js` 和 `clean`。浏览器中的 chip 交互、三模式
+权限和 resume/fork 仍未验收。
