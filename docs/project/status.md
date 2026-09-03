@@ -16,6 +16,7 @@
 - 自定义复制式 `install.ps1` 已删除。
 - Bundle 安装、重复安装、组合输出和卸载已在隔离 `DSH_HOME` 中验证。
 - Tarball 内容通过 `pnpm pack --dry-run` 检查；Node 源码通过语法检查。
+- 提供隔离 `DSH_HOME` 的一键调试脚本，不修改正式 DSH 用户目录。
 
 ## 未完成或未验证
 

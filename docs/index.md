@@ -15,6 +15,7 @@
 - [指南索引](guide/index.md)
 - [安装、升级与卸载](guide/installation.md)：DSH 标准 bundle 生命周期、preset
   边界和验收命令。
+- [本地调试](guide/debugging.md)：一键准备隔离环境、打包当前源码并启动 DSH。
 
 ## 设计与实现
 
