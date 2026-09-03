@@ -36,7 +36,7 @@
 | --- | --- |
 | `package.json` | 单一发布包 `@deepseek-ai/dsh-apb` 的 manifest |
 | `cordis.patch.yml` | profile bundle 安装后的 Cordis patch |
-| `dsh-apb-mode/lib/index.js` | host 状态机与命令入口 |
-| `dsh-client-ui-apb-mode/lib/client.js` | web client 模块入口 |
-| `apb-coding/preset.yml` | preset 元数据 |
-| `apb-coding/agent.cordis.yml` | persona 与 agent-plane 组合 |
+| `host/lib/index.js` | host 状态机与命令入口 |
+| `client/lib/client.js` | web client 模块入口 |
+| `presets/apb-coding/preset.yml` | preset 元数据 |
+| `presets/apb-coding/agent.cordis.yml` | persona 与 agent-plane 组合 |

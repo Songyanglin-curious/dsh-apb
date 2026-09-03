@@ -1,25 +1,25 @@
 {
   "name": "@deepseek-ai/dsh-apb",
-  "description": "APB (Ask/Plan/Build) profile bundle for DeepSeek Harness",
+  "description": "面向 DeepSeek Harness 的 APB（Ask/Plan/Build）配置包",
   "version": "0.1.0",
   "publishConfig": {
     "access": "public"
   },
   "type": "module",
-  "main": "dsh-apb-mode/lib/index.js",
+  "main": "host/lib/index.js",
   "exports": {
     ".": {
-      "default": "./dsh-apb-mode/lib/index.js"
+      "default": "./host/lib/index.js"
     },
     "./client": {
-      "default": "./dsh-client-ui-apb-mode/lib/client.js"
+      "default": "./client/lib/client.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "dsh-apb-mode/lib/index.js",
-    "dsh-client-ui-apb-mode/lib/client.js",
+    "host/lib/index.js",
+    "client/lib/client.js",
     "cordis.patch.yml"
   ],
   "license": "MIT",

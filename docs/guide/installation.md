@@ -6,8 +6,8 @@
 `0.1.1-rc.2` 的 `dsh plugin` 会把命令转发给目标 profile 中的 pnpm，并根据已安装
 包的 `dsh.bundle.patch` 自动维护 `dsh.profile.bundles`。
 
-> 完整功能暂不建议安装使用。bundle 生命周期已经可用，但仓库中的
-> `apb-coding` preset 仍引用旧包名，且“默认 ask 未落实只读”等权限问题尚未修复。参见
+> 完整功能暂不建议安装使用。bundle 生命周期和包名引用已经整理，但真实
+> bundle + preset 挂载、权限沙箱和浏览器行为仍未完成端到端验收。参见
 > [已知问题](../project/known-issues.md)。
 
 ## 两类交付物
@@ -15,7 +15,7 @@
 | 交付物 | 当前管理方式 | 生命周期 |
 | --- | --- | --- |
 | profile bundle `@deepseek-ai/dsh-apb` | `dsh plugin --profile web ...` | 已标准化 |
-| agent preset `apb-coding` | `$DSH_HOME/.agent-presets/apb-coding/` | 尚无仓库内标准安装/卸载流程 |
+| agent preset `apb-coding` | `$DSH_HOME/.agent-presets/apb-coding/` | 独立于 bundle，尚无仓库内标准安装/卸载流程 |
 
 安装 bundle 不会自动安装 preset，卸载 bundle 也不会删除 preset。二者不能当作同一种
 DSH 对象处理。

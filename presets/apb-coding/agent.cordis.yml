@@ -1,0 +1,253 @@
+# `apb-coding` Agent 预设：APB（Ask/Plan/Build）渐进式编码助手。
+# 这是每个进程只挂载一次的完整编码 Agent；persona 强制三模式工作纪律
+#（ask/plan/build）和符合人工工程习惯的小步开发流程。该预设从 `standard` 克隆。
+#
+# 本文件是 AGENT-PLANE 组合配置。工具清单会在一个常驻作用域下挂载一次；
+# 指定本预设的每个会话都会通过作用域父子关系加入，因此这里注册的工具和
+# 提示词区段会覆盖所有加入的 Agent，而会话自己的状态仍由插件按
+# Session/Agent 维度保存。Host 组合（`base.cordis.yml` + `web.cordis.yml`）
+# 负责预设不应拥有的内容：注册表、沙箱与审批链、持久化以及模型路由。
+#
+# 本文件中的服务行必须放在带有 `isolate` realm 的 group 内。否则它会发布到
+# 根 realm，成为进程级单例：另一个预设注册同名服务会冲突，Host 读取者也会
+# 为所有会话解析到同一个预设实例；`dsh-agent-presets` 会在挂载时拒绝这种配置。
+# `true` 表示入口级私有 realm：本常驻挂载拥有独立实例，与其他预设分开。
+#（共享标签不会合并实例；同一 realm 符号下第二次注册会让 `provide()` 抛错。
+# 标签用于加入 REALM，而不是本文件所需的实例隔离。）
+
+# ── 身份 ─────────────────────────────────────────────────────────────────────
+
+# 预设自己的 persona，会覆盖该 Agent 的部署默认 persona。
+# `{{model}}` 和 `{{cwd}}` 分别从 Agent 自己的模型路由和工作区解析。
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: |-
+      你是 APB（Ask / Plan / Build）渐进式编码助手，由 {{model}} 模型驱动。当前工作目录是 {{cwd}}。
+
+      你绝不在一次大而全的处理中完成复杂任务。你要像谨慎的人类工程师一样工作：每次只做小步、已确认的改动，并在进入下一步前完成验证。禁止在单条回复中同时倾倒完整思路和整套实现。
+
+      # 工作模式（三种）
+
+      当前会话在任意时刻恰好处于一种 APB 模式：`ask`、`plan` 或 `build`。模式是真实的会话状态，不是你自行声明的约定：通过 `/apb`（或 Alt+M、composer 按钮）切换模式时，也会切换会话的 Host 权限预设，因此运行时上下文中的有效文件策略会告诉你当前处于哪种模式：
+
+      - 文件策略为 `read-only`：当前处于 `ask` 或 `plan`。你实际上无法写入；沙箱会拒绝变更工具。请据此行动。
+      - 文件策略为 `workspace-write`：当前处于 `build`。允许写入。
+
+      各模式语义如下：
+      - `[ask]`：与用户进行问答式讨论：澄清意图、权衡方向、找出方案漏洞。只读。
+      - `[plan]`：基于 ask 阶段的讨论产出实施计划（只读），包括目标、入口、文件级步骤、TODO 占位、模块顺序和验证方式。给出计划后等待用户通过 `/apb build` 或 APB 按钮显式切换；不得实施。
+      - `[build]`：执行已经确认的对话或计划：写入文件、运行命令、调试和重构。
+
+      你不需要在每条回复前加模式标签，也不要每轮重复这些规则。请从运行时文件策略行和 `/apb` 命令反馈中读取当前模式。用户切换模式后，你会在对话中看到切换通知。
+
+      在 `[plan]` 中，只能使用不会改变仓库的读取、搜索、静态分析和检查。计划必须覆盖目标、成功标准、入口、文件级修改、模块顺序、边界情况、失败模式、测试和验证方式。不得编辑文件、修改配置、运行会重写内容的格式化器或生成器、提交代码，或以其他方式实施计划。仅有对话中的“同意”不构成实施授权。
+
+      # 渐进式小步工作流（模块生命周期）
+
+      1. 先思考和讨论。在接触代码前，确认方向没有明显漏洞。
+      2. 约定代码入口和精简的文件/步骤布局。保持简单，只有讨论确实需要时才扩展。
+      3. 为各步骤建立 TODO 占位。
+      4. 一次实现和调试一个模块，每完成一个模块就验证，再进入下一个模块。
+      5. 只有整个流程完成端到端运行后，第一轮实现才算完成。
+      6. 然后再重构，同样遵循小步原则，每轮只处理一种重构：
+         a. 将分散的变量收拢到对象中；
+         b. 将若干步骤归并为命名方法；
+         c. 为剩余的零散步骤命名方法；
+         d. 复查每个模块：拆分承担多个职责的方法，将过度依赖条件判断的逻辑改成更清晰的模式，追求更清楚、更模块化、更内聚的代码；
+         e. 复查外层架构和分层：外层负责流程编排，内层负责业务实现；如果业务层承担了流程编排，就将其重构出去。
+
+      每条回复都停留在当前步骤：先总结上一步产出的结果，再说明下一步的入口和范围。不要一次倾倒完整设计及其全部实现。
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── APB 模式 ────────────────────────────────────────────────────────────────
+
+# APB Host 状态、`/apb` 命令、权限联动、投影和客户端按钮由 profile bundle
+# 统一提供一次。本预设只拥有 Agent-Plane 的 persona 和工具，不得再次挂载
+# APB 服务。
+
+# ── Shell ───────────────────────────────────────────────────────────────────
+
+# `shell-env` 保留在 Host 组合中：`apps/cli/src/web.ts` 注入它来发布
+# `DSH_WEB_URL`/`DSH_WEB_MODE`。注入服务的 Host 行属于 Host-Plane，因为注入
+# 发生在任何会话存在之前，此时没有可用于绑定的 Agent。若放入预设 realm，
+# 这些变量根本不会到达模型的 shell。两个 Shell 工具从 Host 注册表消费服务；
+# 它们的执行器（`bash-sandbox`/`pwsh-sandbox`）也属于 Host-Plane。
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── 文件系统 ─────────────────────────────────────────────────────────────────
+
+# 下面两个工具都注册到 Host 的 `tools` 注册表且不提供服务，因此不需要 realm。
+# `fs` 服务及其权限策略保留在 Host 中。
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── 后台任务 ─────────────────────────────────────────────────────────────────
+
+# 这里只放模型可见的控制工具。任务注册表保留在 Host-Plane：它的生产者位于
+# 本文件无法覆盖的 realm 之外；上面的 `tool-bash` 通过 `ctx.get` 解析它，
+# 而这里的入口级 realm 对其他兄弟行不可见。因此如果把这些控制工具放进目录
+# 却把注册表放错位置，`run_in_background` 会回答“后台任务不可用”。注册表
+# 本来就按所属 Agent 绑定，一个 Host 实例即可服务所有会话。预设真正选择的
+# 是 Agent 是否可以收集和停止后台任务。
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── 技能 ─────────────────────────────────────────────────────────────────────
+
+# 技能注册表位于 Host 组合中，并按作用域分层：下面这些行注册到本预设自己的
+# 层，因此不需要 realm。`skill-filesystem` 为本预设 Agent 提供本地根目录发现，
+# `tool-skill` 提供技能目录和加载器；合并后的目录也会包含部署全局注册的内容
+#（例如仓库插件）。
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── 目标 ─────────────────────────────────────────────────────────────────────
+
+# 这里只放模型可见的目标工具。目标 SERVICE、会话驱动器和 `/goal` 命令保留在
+# Host-Plane：Gateway 通过生成的描述符把目标域作为 Remote 端点提供，接收者会
+# 在 Host 上解析 `goals`；如果在这里使用入口级 realm，反而会把它隐藏。注册表
+# 本来按会话绑定，一个 Host 实例即可服务所有会话。预设选择的是 Agent 是否
+# 可以调用目标工具。
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── 压缩 ─────────────────────────────────────────────────────────────────────
+
+# `compaction-basic` 通过 `ctx.get` 读取 `toolResultPrune`，因此 pruner 必须与
+# 它共享这里的 realm，不能放在 realm 外。
+#
+# `tokenMeter` 特意不放进这个 realm：它留在 HOST-Plane，下面这些行解析同一个
+# Host 实例。它不需要配置，按 Session 记录每次折叠，并拥有浏览器为所有会话
+# 读取的上下文计量投影单元；如果放入 realm，这些单元会随着当前挂载的预设
+# 出现或消失。预设选择的是 Agent 是否执行压缩，即下面的 `compaction-basic`。
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── 委派与工作流 ─────────────────────────────────────────────────────────────
+
+# `subagents` 注册表及其 spawn/fork 后端位于 HOST 组合中：注册表是进程级单例，
+# api-proxy 会将跨会话查询提供给浏览器，而且同一个 provider 名称只能注册一次。
+# 本预设提供委派工具，这些工具解析该 Host 注册表。
+#
+# `workflows` 不同：Agent 之外没有组件读取它，因此所有访问它的行都在这里共享
+# 一个入口级 realm；如果消费者留在 realm 外，就会解析到一个本预设没有填充的
+# Host 注册表。
+#
+# `tool-subagent-report` 出于与注册表相同的原因属于 Host-Plane，并不是因为预设
+# 不能使用它：它是在该单例上注册可继续的 SETUP，而不是本 Agent 调用的工具；
+# SETUP 列表不感知作用域，每挂载一个预设就会让每个子 Agent 在每个活动会话中
+# 重复注册一次 `report`，第二次注册便会抛错。
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
+
+    - id: tool-subagent-fork
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: fork
+        toolName: subagent_fork
+        backgroundMode: continuable
+
+    # 生产版 dsh 不会安装这些可选 provider。请在此 Profile 中安装匹配的
+    # Bundle 并重启 Host，然后复制本预设并移除对应工具行的 `disabled`。
+    # Host 中存在 provider 本身并不会自动授予工具权限。
+    - id: tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: codex
+        toolName: subagent_codex
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: tool-subagent-claude-code
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: claude-code
+        toolName: subagent_claude_code
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
+
+# ── 其余模型可见工具 ─────────────────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# `web` 服务及其搜索 provider 保留在 Host 组合中；这里只有按会话提供的模型
+# 可见工具。
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000

@@ -49,24 +49,22 @@
 `start` 都会自动重新打包并替换上一次调试包，因此修改任何源码后仍只需重新执行
 一条启动命令。
 
-## 当前兼容处理
+## Bundle 与 preset 的挂载边界
 
-源码 preset 仍引用已退役的 `@deepseek-ai/dsh-apb-mode`，而统一 bundle 已经在 profile
-层挂载 host controller。脚本生成 preset 副本时，仅在副本中移除这段旧挂载，避免
-找不到旧包或重复发布服务；源码不会被修改。
-
-这是 APB-003 的临时调试处理，不代表该问题已经关闭。正式交付仍需统一 bundle 与
-preset 的挂载职责。
+统一 bundle `@deepseek-ai/dsh-apb` 在 profile 层只挂载一次 host controller 和 client。
+`presets/apb-coding/` 只提供 agent-plane persona、工具和 APB 工作流配置，不再挂载第二个
+APB service。调试脚本直接复制该 preset，不再临时删除配置块。
 
 ## 调试观察点
 
 - 终端：查看 bundle 加载、Cordis service 和 preset mount 错误。
 - Browser Console：查看 client module、React 和 remote command 错误。
 - Browser Network：确认 `/plugins/@deepseek-ai/dsh-apb/client.js` 返回成功。
-- `/apb status`：只用于观察 APB logged mode；当前不能作为真实权限证明。
+- `/apb status`：观察 APB 模式、目标权限和 permission service 折叠出的有效权限；真实
+  file policy 仍需结合 DSH 运行时和写入测试验证。
 - DSH 原生权限控件和实际写入测试：用于核对有效 file policy。
 
-当前仍有默认 ask 未同步只读、同模式不重同步、原生 plan 冲突和 UI 吞错等问题。
+当前仍有 plan 流程的真实会话验收、UI 吞错、并发提交和端到端验收等问题。
 完整验收边界见[已知问题](../project/known-issues.md)。
 
 ## 已验证范围

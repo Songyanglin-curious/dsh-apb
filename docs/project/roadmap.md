@@ -15,17 +15,25 @@
 
 目标：全新 DSH 环境只按一种公开流程即可安装、启动和卸载 APB。
 
-- 决定 host controller 只由 profile bundle 挂载，还是由 preset 挂载；禁止双重挂载。
-- 将 preset 中的旧包名迁移到统一包契约，关闭 APB-003。
+当前状态：host/client/preset 边界和包名引用已完成代码整理；全新隔离环境的冷启动、
+真实 preset 挂载和卸载残留检查仍未执行。
+
+- 决定 host controller 只由 profile bundle 挂载，preset 不重复挂载；禁止双重挂载。
+- 将内部目录与 preset 路径整理为 `host/`、`client/`、`presets/apb-coding/`，并关闭
+  APB-003 的代码问题。
 - 明确 `apb-coding` 的标准安装、升级和卸载机制；若 DSH 暂无 preset CLI，提供可验证、
   可回滚且不污染 bundle 状态的独立流程。
 - 在隔离 `DSH_HOME` 中完成 tarball + preset 的冷启动、重启和卸载验收。
 
-验收：profile 无手工 patch、无旧包名、无孤立目录；preset 可发现并成功挂载。
+验收：profile 无手工 patch、无旧包名、无孤立目录；preset 可发现并与已安装 bundle
+成功组合。
 
 ## 阶段 2：权限状态可信化
 
 目标：APB 模式、目标权限和有效权限不再静默脱节。
+
+当前状态：APB-001/002 的 host 代码修复已完成；真实 DSH/E2E 验收、外部权限变更
+策略和完整有效权限证明仍未完成。
 
 - 在 APB 会话创建/选择时写入初始化状态并应用 ask 的 `read-only`。
 - 显式模式命令始终幂等应用权限，关闭 APB-001 和 APB-002。
@@ -39,11 +47,16 @@
 
 目标：系统中只存在一个可见、可解释的 plan 状态。
 
-- 评估复用 DSH 原生 plan-mode，或移除 preset 中原生 plan 组并由 APB 独立承载。
-- 统一切换命令、prompt section、UI 控件和退出语义，关闭 APB-004。
+当前状态：已移除 preset 中的原生 plan-mode，DSH Web 后置 patch 会禁用 dsh-base
+Host 层的 `plan-mode`；APB host 已成为代码层面的唯一 plan 来源，真实会话交互和
+模型行为仍未完成验收。
+
+- 由 APB 独立承载 plan prompt、只读权限、`/apb build` 确认切换和 UI。
+- 统一切换命令、prompt section、UI 控件和确认语义，保持 dsh-web-app 对 dsh-base
+  `plan-mode` 的禁用，关闭 APB-004 的代码问题。
 - 覆盖 ask → plan → build、plan → ask 和外部权限变化等状态转换。
 
-验收：不存在 APB build 与原生 plan 同时生效的组合，也不出现重复模式控件。
+验收：只存在 APB 的 plan 状态和切换入口，plan/build 的 prompt、权限与 UI 一致。
 
 ## 阶段 4：UI 可靠性与测试
 

@@ -2,47 +2,11 @@
 
 优先级说明：P1 会破坏安装或核心权限承诺，应先修；P2 会造成状态、交互或维护风险。
 
-## APB-001 [P1] 新会话默认 ask，但未初始化只读权限
-
-- 现象：没有 `apb/mode` 事件时，mode fold 和 UI 都显示 `ask`，但插件没有调用
-  `permissionPresets.set(session, "read-only")`。
-- 影响：DSH profile 默认若为 `workspace-write`，用户看到 ask 仍可能实际可写。
-- 位置：`dsh-apb-mode/lib/index.js` 的 `foldMode` 默认值、projection `init` 和命令入口。
-- 验收：新建 APB 会话无需手动切换，真实 file policy 即为 `read-only`，写操作由
-  沙箱拒绝。
-
-## APB-002 [P1] 同模式操作无法重新同步权限
-
-- 现象：`/apb ask` 在当前 fold 已是 ask 时直接返回；`ApbModeController.set` 也只在
-  模式变化时调用权限服务。
-- 影响：一旦 APB 状态与权限脱节，用户无法用同模式命令修复。
-- 位置：`/apb` handler 的 `target === current` 分支和 controller `set` 方法。
-- 验收：显式选择任一模式都幂等地应用其目标权限，结果反馈区分“模式未变”和
-  “权限已同步”。
-
-## APB-003 [P1] 统一 bundle 与 preset 的包名未闭环
-
-- 现象：标准安装只提供 `@deepseek-ai/dsh-apb`，但
-  `apb-coding/agent.cordis.yml` 仍挂载 `@deepseek-ai/dsh-apb-mode`。
-- 影响：bundle 可成功安装，preset 挂载仍可能因旧包不存在而失败；完整产品没有
-  可复现安装路径。
-- 位置：根 `package.json`、`cordis.patch.yml` 与 preset 的 `apb-mode` 行。
-- 验收：tarball 安装后只存在一个包名，preset 能在全新隔离 `DSH_HOME` 中发现并
-  挂载，卸载后不残留包层或无效 preset 引用。
-
-## APB-004 [P2] APB plan 与 DSH 原生 plan 是独立状态机
-
-- 现象：preset 同时包含 APB mode 和 `@deepseek-ai/dsh-plan-mode`。
-- 影响：APB 可显示 build 而原生 plan 仍禁止实施，或 APB 显示 plan 而原生 plan
-  关闭；页面也可能出现两个模式入口。
-- 位置：`apb-coding/agent.cordis.yml` 的 `apb` 与 `planning` 两组。
-- 验收：对用户只暴露一个 plan 状态和一个切换入口，prompt、权限和 UI 同步变化。
-
 ## APB-005 [P2] APB 状态与真实权限可长期脱节
 
-- 现象：原生权限控件可独立修改权限；`/apb status` 只输出
-  `MODE_PERMISSION[current]` 的静态映射。
-- 影响：状态查询和 UI 无法证明有效权限，核心权限事实来源不可信。
+- 现象：原生权限控件可独立修改权限；`/apb status` 虽已报告目标权限和有效权限，
+  但外部改档后不会立即自动纠正 APB 模式。
+- 影响：在下一次 APB 会话激活或显式模式命令前，模式和有效权限仍可能暂时脱节。
 - 位置：host command、projection 和 permission preset 交互。
 - 验收：status 同时报告 APB 模式、目标权限和有效权限；发生偏差时按明确策略修复
   或向用户报警。
@@ -52,7 +16,7 @@
 - 现象：`cycle()` 返回错误字符串，但 `ApbModeChip` 不显示；keydown 未过滤
   `event.repeat`，也未以可靠锁阻止上一次请求完成前再次提交。
 - 影响：命令缺失、挂载失败或远程调用失败时用户无反馈，长按 Alt+M 可能跳过模式。
-- 位置：`dsh-client-ui-apb-mode/lib/client.js`。
+- 位置：`client/lib/client.js`。
 - 验收：错误在 chip 附近可见；点击和键盘共享单一并发锁；重复 keydown 不发请求。
 
 ## APB-007 [P2] 缺少自动化与端到端验收
@@ -63,6 +27,40 @@
   web 会话的 E2E 路径。
 
 ## 已关闭问题
+
+### APB-003 [已关闭（代码）] bundle、host、client 与 preset 边界混乱
+
+- 处理：将内部目录重命名为 `host/` 和 `client/`，将 preset 移至
+  `presets/apb-coding/`；根包仍统一为 `@deepseek-ai/dsh-apb`。
+- 挂载策略：host/client 由 profile bundle 各挂载一次，preset 只提供 agent-plane
+  组合，不再把内部 host 目录名当作独立包引用。
+- 代码验证：manifest、patch、preset 和调试脚本的旧路径/旧包名已移除；tarball
+  dry-run 已通过。
+- 尚未验证：全新隔离 `DSH_HOME` 的 preset 冷启动、真实挂载和卸载后残留检查。
+
+### APB-004 [已关闭（代码）] APB plan 与 DSH 原生 plan 重复
+
+- 处理：移除 APB preset 自己挂载的 `@deepseek-ai/dsh-plan-mode`、`plan/mode`
+  状态和 `exit_plan_mode` 入口；DSH Web 的后置 patch 已将 dsh-base 的 Host 层
+  `plan-mode` 行禁用；APB host 统一提供自己的 plan prompt、只读权限、`/apb build`
+  确认切换和 UI。
+- 代码验证：实际 `dsh --profile web --dump-config` 已显示 `plan-mode`、`tool-fs` 和
+  `tool-fs-search` 在 Web Host 层为 `disabled: true`；host/client 语法检查已通过。
+- 尚未验证：真实 DSH 会话中 plan → build 的完整交互和模型行为，仍由 APB-007 覆盖。
+
+### APB-001 [已关闭（代码）] 新会话 ask 权限初始化
+
+- 处理：在 `agent/session-start` 对 APB 会话按当前模式调用
+  `permissionPresets.set()`；没有模式事件时记录隐式 `ask` 事件。
+- 代码验证：host 文件语法检查已通过。
+- 尚未验证：真实 DSH 会话启动后的 file policy 和沙箱拒写，仍由 APB-007 覆盖。
+
+### APB-002 [已关闭（代码）] 同模式操作权限同步
+
+- 处理：`/apb` 和 `ApbModeController.set` 无论模式是否变化都幂等应用目标权限；
+  只有模式变化时才追加 `apb/mode` 事件，并在反馈中区分两种结果。
+- 代码验证：host 文件语法检查已通过。
+- 尚未验证：真实权限控件改档后的完整恢复链路，仍需 DSH E2E 验收。
 
 ### APB-000 [已关闭] 自定义复制安装无法可靠升级和卸载
 

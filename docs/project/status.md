@@ -12,7 +12,9 @@
 - 原 APB v2 内容已经迁入独立 Git 仓库并纳入版本管理。
 - 项目说明文档已集中到 `docs/`，并建立分层索引。
 - 单一发布包名确定为 `@deepseek-ai/dsh-apb`。
-- 根 manifest 已声明 `dsh.bundle.patch`、host 入口和 `./client` 入口。
+- 根 manifest 已声明 `dsh.bundle.patch`、`host/` 入口和 `./client` 入口。
+- 目录边界已整理为 `host/`、`client/` 和 `presets/apb-coding/`；host/client 由 bundle
+  挂载，preset 不再重复挂载 APB host。
 - 自定义复制式 `install.ps1` 已删除。
 - Bundle 安装、重复安装、组合输出和卸载已在隔离 `DSH_HOME` 中验证。
 - Tarball 内容通过 `pnpm pack --dry-run` 检查；Node 源码通过语法检查。
@@ -22,10 +24,11 @@
 
 | 项目 | 状态 | 影响 |
 | --- | --- | --- |
-| preset 引用统一包 | 未完成 | `apb-coding` 仍挂旧包名，完整挂载可能失败 |
-| 新会话 ask 权限初始化 | 未完成 | UI/状态可能是 ask，真实权限仍可写 |
-| APB 与有效权限一致性 | 未完成 | status 和 chip 不能作为权限事实来源 |
-| APB plan 与原生 plan 统一 | 未完成 | 两套模式可能互相冲突 |
+| preset 引用统一包与目录重构 | 代码已完成，冷启动 E2E 未验证 | 旧路径/旧包名已移除；真实 preset 挂载仍需验证 |
+| 新会话 ask 权限初始化 | 代码已完成，E2E 未验证 | 已在 `agent/session-start` 校准；真实 file policy 仍需验证 |
+| 同模式权限重新同步 | 代码已完成，E2E 未验证 | `/apb` 与 controller 均改为幂等设置权限 |
+| APB 与有效权限一致性 | 未完成 | 外部权限改档后的自动纠正策略仍未定义 |
+| APB plan 单一状态源 | 代码已完成，E2E 未验证 | preset 内原生 plan 已移除，DSH Web 后置 patch 已禁用 dsh-base 的 `plan-mode`；真实 plan/build 交互仍需验证 |
 | UI 错误与并发保护 | 未完成 | 切换失败无可见反馈，快捷键可重复提交 |
 | 自动化测试 | 未完成 | 当前仓库没有测试文件或持续集成 |
 | 真实 DSH host 挂载 | 未验证 | 未证明 preset、service realm 和 client module 全链路可用 |
