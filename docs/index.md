@@ -4,6 +4,12 @@
 [项目状态](project/status.md)和[已知问题](project/known-issues.md)为事实基线，
 不要从旧设计目标推断现有能力。
 
+## 需求基线
+
+- [原始需求索引](requirements/index.md)
+- [APB 工作模式与渐进编码方式原始需求](requirements/apb-work-mode-original.md)：
+  保存最初需求原文，不做润色或覆盖。
+
 ## 使用指南
 
 - [指南索引](guide/index.md)
