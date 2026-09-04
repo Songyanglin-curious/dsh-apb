@@ -1,96 +1,95 @@
 # 安装、升级与卸载
 
-## 适用范围
+## Profile 约定
 
-本页说明 `@deepseek-ai/dsh-apb` profile bundle 的标准包管理方式。DSH
-`0.1.1-rc.2` 的 `dsh plugin` 会把命令转发给目标 profile 中的 pnpm，并根据已安装
-包的 `dsh.bundle.patch` 自动维护 `dsh.profile.bundles`。
+APB 不安装到日常 `web` Profile。推荐在同一个 `DSH_HOME` 中使用两套独立 Profile：
 
-> 完整功能暂不建议安装使用。bundle 生命周期和包名引用已经整理，但真实
-> bundle + preset 挂载、权限沙箱和浏览器行为仍未完成端到端验收。参见
-> [已知问题](../project/known-issues.md)。
+| 用途 | Profile | APB 来源 |
+| --- | --- | --- |
+| 日常开发 | `apb-dev` | `link:` 到本仓库 |
+| 稳定使用 | `apb` | registry 或已验收的 tarball |
+
+两个 Profile 只分别保存依赖清单和 bundle 组合；实际包内容由 pnpm 的内容寻址存储与链接
+机制复用。它们共享 Home 级 Session、Settings 等数据，因此不要同时操作同一 Session。
 
 ## 两类交付物
 
-| 交付物 | 当前管理方式 | 生命周期 |
+| 交付物 | 管理方式 | 生命周期 |
 | --- | --- | --- |
-| profile bundle `@deepseek-ai/dsh-apb` | `dsh plugin --profile web ...` | 已标准化 |
-| agent preset `apb-coding` | `$DSH_HOME/.agent-presets/apb-coding/` | 独立于 bundle，尚无仓库内标准安装/卸载流程 |
+| profile bundle `@deepseek-ai/dsh-apb` | `dsh plugin --profile <name> ...` | 已标准化 |
+| agent preset `apb-coding` | DSH preset roots | 独立于 bundle，正式交付流程尚未标准化 |
 
-安装 bundle 不会自动安装 preset，卸载 bundle 也不会删除 preset。二者不能当作同一种
-DSH 对象处理。
+安装 bundle 不会自动安装 preset，卸载 bundle 也不会删除 preset。开发环境由
+`scripts/apb-dev.patch.yml` 直接引用仓库 preset；稳定安装仍需单独部署 preset。
 
-## 开发目录安装
+## 日常开发安装
 
-在仓库根目录执行：
+推荐直接执行：
 
 ```powershell
-dsh plugin --profile web add .
+pnpm dev:setup
 ```
 
-相对路径会由 DSH 锚定到命令调用目录。该方式通常形成 pnpm 文件链接，适合本机开发，
-不作为跨机器交付或卸载完整性验收的依据。
+等价的核心 DSH 操作为：
+
+```powershell
+dsh plugin --profile apb-dev add @deepseek-ai/dsh-web-app@0.1.1-rc.2
+dsh plugin --profile apb-dev add link:D:/mycode/dsh-apb
+```
+
+仓库的 `devDependencies` 与运行时 `peerDependencies` 对齐，用来解决 Node 从链接源目录加载
+APB 时的依赖解析问题。完整启动方式见[本地调试](debugging.md)。
 
 ## Tarball 或 registry 安装
 
-先生成交付包：
+先为稳定用途创建 Web Profile：
+
+```powershell
+dsh plugin --profile apb add @deepseek-ai/dsh-web-app@0.1.1-rc.2
+```
+
+安装本地 tarball：
 
 ```powershell
 pnpm pack --pack-destination <输出目录>
+dsh plugin --profile apb add <输出目录>\deepseek-ai-dsh-apb-<版本>.tgz
 ```
 
-再安装生成的 tarball：
+发布到 registry 后可使用包名：
 
 ```powershell
-dsh plugin --profile web add <输出目录>\deepseek-ai-dsh-apb-<版本>.tgz
+dsh plugin --profile apb add @deepseek-ai/dsh-apb
 ```
 
-发布到 registry 后可使用包名安装：
+不要直接复制文件到 Profile 的 `node_modules`，也不要手工维护
+`dsh.profile.bundles`。
+
+## 升级与卸载
+
+Registry 依赖升级：
 
 ```powershell
-dsh plugin --profile web add @deepseek-ai/dsh-apb
+dsh plugin --profile apb update @deepseek-ai/dsh-apb
 ```
 
-每次发布应递增 `package.json` 中的版本。不要直接复制文件到 profile 的
-`node_modules`，也不要手工维护 `dsh.profile.bundles`。
-
-## 升级
-
-Registry 依赖使用：
+卸载 bundle：
 
 ```powershell
-dsh plugin --profile web update @deepseek-ai/dsh-apb
+dsh plugin --profile apb remove @deepseek-ai/dsh-apb
 ```
 
-Tarball 交付使用新版本 tarball 再次执行 `add`。完成后重启 DSH，运行中的 host
-不会自动重新装载已经缓存的 ESM 模块。
+卸载不会删除 preset 或 Home 级 Session/Settings。Tarball 交付应使用新版本包再次执行
+`add`；运行中的 Host 不会自动装载已经缓存的 ESM 模块，应重启 DSH。
 
-## 卸载
+## 验收
 
 ```powershell
-dsh plugin --profile web remove @deepseek-ai/dsh-apb
+dsh --profile apb --dump-config
 ```
 
-命令成功后，DSH 会从 profile 依赖和 `dsh.profile.bundles` 中移除该包。它不会删除
-`$DSH_HOME/.agent-presets/apb-coding/`，preset 清理目前需要单独处理。
+组合输出应包含 `@deepseek-ai/dsh-apb` 和 `apb-mode`；目标 Profile 的
+`package.json` 中，依赖和 `dsh.profile.bundles` 也应同时包含该包。卸载后重复检查，以上
+两处都不应再包含 APB。
 
-## Bundle 验收
-
-安装后检查组合结果：
-
-```powershell
-dsh --profile web --dump-config
-```
-
-输出应包含 bundle 包名 `@deepseek-ai/dsh-apb` 及 patch 行 `apb-mode`。再检查目标
-profile 的 `package.json`，其依赖和 `dsh.profile.bundles` 应同时包含该包。
-
-卸载后重复检查，以上两处都不应再包含该包。tarball 安装/卸载已在隔离
-`DSH_HOME` 中通过；真实浏览器挂载和权限行为尚未验收。
-
-## 常见边界
-
-- 需要 pnpm 位于 `PATH`；`dsh plugin` 本身只是管理和协调层。
-- `add .` 是开发链接；交付验收优先使用 tarball 或 registry 包。
-- 修改 bundle 后必须重启 DSH，再刷新浏览器。
-- 当前不要以“chip 出现”推断权限已同步；应检查真实 permission/file policy。
+Tarball 安装/卸载已在隔离 `DSH_HOME` 中通过；稳定 Profile 的 preset 正式交付、真实
+浏览器挂载和权限沙箱仍未完成全量端到端验收。

@@ -18,6 +18,9 @@
 当前状态：host/client/preset 边界和包名引用已完成代码整理；全新隔离环境的冷启动、
 真实 preset 挂载和卸载残留检查仍未执行。
 
+开发侧已确定为共享 `DSH_HOME` 下的独立 `apb-dev` Profile：bundle 使用仓库 `link:`，
+preset root 指向仓库，Client 使用 DSH HMR，Host 变化重启整进程；这不替代正式交付验收。
+
 - 决定 host controller 只由 profile bundle 挂载，preset 不重复挂载；禁止双重挂载。
 - 将内部目录与 preset 路径整理为 `host/`、`client/`、`presets/apb-coding/`，并关闭
   APB-003 的代码问题。
@@ -32,14 +35,14 @@
 
 目标：APB 模式、目标权限和有效权限不再静默脱节。
 
-当前状态：APB-001/002 的 host 代码修复已完成；真实 DSH/E2E 验收、外部权限变更
-策略和完整有效权限证明仍未完成。
+当前状态：APB-001/002 的 host 代码修复已完成，运行中切入 APB preset 的同步代码已补齐；
+真实 DSH/E2E 验收和完整有效权限证明仍未完成。
 
-- 在 APB 会话创建/选择时写入初始化状态并应用 ask 的 `read-only`。
+- 在 APB 会话创建、恢复或选择时初始化瞬时 ask 状态并应用 `read-only`，不写历史事件。
 - 显式模式命令始终幂等应用权限，关闭 APB-001 和 APB-002。
-- 查询宿主有效 permission preset，把真实值纳入 `/apb status` 和 projection。
-- 定义用户通过原生权限控件改档后的策略：同步 APB、自动纠正或明确报警。
-- 验证 resume/fork 后不仅恢复模式，还恢复匹配的有效权限。
+- 查询宿主有效 permission preset，把真实值纳入 `/apb status`。
+- 保持用户已确认的原生权限改档处理策略不变，并验证切入 APB preset 的即时同步。
+- 验证 resume/fork 后不恢复旧模式，而是回到 ask 并同步匹配的 `read-only` 权限。
 
 验收：任意入口切换后，模式、status、chip、file policy 和沙箱行为一致。
 
@@ -51,19 +54,20 @@
 Host 层的 `plan-mode`；APB host 已成为代码层面的唯一 plan 来源，真实会话交互和
 模型行为仍未完成验收。
 
-- 由 APB 独立承载 plan prompt、只读权限、`/apb build` 确认切换和 UI。
-- 统一切换命令、prompt section、UI 控件和确认语义，保持 dsh-web-app 对 dsh-base
-  `plan-mode` 的禁用，关闭 APB-004 的代码问题。
+- 由 APB 独立承载静态 plan 规则、当前模式 runtime context、只读权限、`/apb build`
+  确认切换和 UI。
+- 统一切换命令、runtime context、UI 控件和确认语义，保持 dsh-web-app 对 dsh-base
+  `plan-mode` 的禁用；模式切换不得改写 system prompt。
 - 覆盖 ask → plan → build、plan → ask 和外部权限变化等状态转换。
 
-验收：只存在 APB 的 plan 状态和切换入口，plan/build 的 prompt、权限与 UI 一致。
+验收：只存在 APB 的 plan 状态和切换入口，静态规则、动态模式上下文、权限与 UI 一致。
 
 ## 阶段 4：UI 可靠性与测试
 
 目标：失败可见、输入幂等、回归可自动发现。
 
 - 展示远程命令失败，添加键盘 repeat 过滤和共享并发锁，关闭 APB-006。
-- 增加 host 纯函数、命令与 projection 测试。
+- 增加 host 纯函数、命令、瞬时状态与 Remote 接口测试。
 - 增加 client loader、渲染、错误和快捷键测试。
 - 固化 bundle pack/add/dump/remove 集成测试。
 - 完成真实 DSH web 的 chip、权限拒写、resume/fork E2E，关闭 APB-007。

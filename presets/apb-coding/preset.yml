@@ -1,2 +1,2 @@
 name: APB 渐进编码助手
-description: 基于标准编码 Agent 的渐进式开发助手。ask/plan/build 三模式由宿主权限预设强制（ask/plan→只读、build→可写工作区），可 Alt+M 或 /apb 切换并随会话持久；遵循先讨论定方向、入口与文件规划、todo 占位、逐模块实现调试、走通后再分步重构的人类式小步开发纪律。
+description: 基于标准编码 Agent 的渐进式开发助手。ask/plan/build 三模式是当前活动会话的瞬时控制档位，由宿主权限预设强制（ask/plan→只读、build→可写工作区），可用 Alt+M 或 /apb 切换；遵循先讨论定方向、入口与文件规划、todo 占位、逐模块实现调试、走通后再分步重构的人类式小步开发纪律。

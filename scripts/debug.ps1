@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 # APB 隔离调试入口。
 #
 # 输入：Action、可选的隔离 DSH_HOME、端口和是否打开浏览器的开关。

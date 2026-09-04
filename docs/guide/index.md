@@ -1,7 +1,8 @@
 # 使用指南
 
 - [安装、升级与卸载](installation.md)
-- [本地调试](debugging.md)
+- [本地调试入口](debugging.md)
+- [APB 本地开发调试环境使用说明](apb-local-development-usage.md)
 
-当前指南只把已经验证过的 profile bundle 生命周期作为稳定事实。完整 APB 产品仍
-依赖独立 preset，而 preset 与统一包之间存在待修复的集成问题。
+开发链路使用独立 `apb-dev` Profile 和仓库 `link:`；发布包验证使用隔离 Home 和
+tarball。完整 APB 产品仍依赖独立 preset，其正式安装、升级和卸载流程尚未标准化。

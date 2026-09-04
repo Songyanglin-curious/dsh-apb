@@ -1,29 +1,27 @@
 // @deepseek-ai/dsh-apb/host
 //
-// APB（Ask / Plan / Build）三模式会话状态的 Host 端入口。
+// APB（Ask / Plan / Build）三模式运行状态的 Host 端入口。
 //
 // 设计约束：
-// - 模式按会话持久化为 `apb/mode` 事件，后写入的事件生效，默认值为
-//   `ask`；因此恢复会话和派生会话都可以从事件重建状态，不依赖实时镜像。
+// - 模式是当前 Host 进程中按 Session 隔离的瞬时控制档位，不写入 session log；
+//   新建、恢复和重新挂载 APB 会话都从安全的 `ask` 开始。
 // - 通过 `/apb`（或最终执行该命令的客户端快捷键）切换模式时，同时通过
 //   `permissionPresets` 写入 Host 权限预设：ask/plan -> `read-only`，
 //   build -> `workspace-write`。这是文件沙箱和审批开关的真实约束，不是
 //   仅靠提示词要求模型“请保持只读”。
-// - `ask` 是默认模式，提示词区段保持为空；规划和构建规则由 APB 自己提供，
-//   避免再依赖另一套 plan 状态机。
-// - 会话投影 `apbMode` 向客户端暴露 `{ enabled, mode }`。`enabled` 会折叠
-//   当前会话自己的 `agent-preset/selected` 事件，只有使用 apb-coding 预设
-//   的会话才显示客户端模式按钮。
+// - `ask` 是默认模式；三种模式的稳定定义由 preset persona 一次性提供，当前模式
+//   及当前行动目标作为运行时上下文暴露，切换模式不会改写系统提示词。
+// - 客户端通过 `apbMode/get|cycle` Remote 方法读取和切换 Host 内存状态，不建立
+//   浏览器状态源，也不借助持久化 session projection。
 //
-// 模块输入：Cordis Host 上的会话事件、权限服务和命令/投影注册表。
-// 模块输出：APB 服务、模式提示词、权限副作用、`apbMode` 投影和 `/apb` 命令。
+// 模块输入：Cordis Host 上的会话事件、权限服务、系统提示词和命令注册表。
+// 模块输出：APB Remote 服务、模式运行时上下文、权限副作用和 `/apb` 命令。
 
-import { Service } from "@deepseek-ai/cordis";
-import { z } from "zod";
+import { TypertRemoteService } from "@deepseek-ai/dsh-typert-protocol";
 
 /** 按循环顺序排列的三个模式标识。标识是协议的一部分，不要翻译。 */
 const MODES = ["ask", "plan", "build"];
-/** 尚未记录模式事件的会话所使用的默认模式。 */
+/** 每次 APB 会话激活时使用的安全默认模式。 */
 const DEFAULT_MODE = "ask";
 /** 本插件服务的 apb-coding 预设标识。 */
 const APB_PRESET = "apb-coding";
@@ -33,28 +31,6 @@ const MODE_PERMISSION = {
 	plan: "read-only",
 	build: "workspace-write"
 };
-
-/**
- * 从会话事件中折叠出最后一次有效的 APB 模式。
- * @param {Array<{type: string, data?: object}>} events 会话事件列表。
- * @returns {"ask"|"plan"|"build"} 当前模式；没有有效事件时返回 `ask`。
- */
-function foldMode(events) {
-	let mode = DEFAULT_MODE;
-	for (const event of events) {
-		if (event.type === "apb/mode" && MODES.includes(event.data?.mode)) mode = event.data.mode;
-	}
-	return mode;
-}
-
-/**
- * 判断会话是否已经记录过有效的 APB 模式事件。
- * @param {Array<{type: string, data?: object}>} events 会话事件列表。
- * @returns {boolean} 是否存在可持久化恢复的模式选择。
- */
-function hasLoggedMode(events) {
-	return events.some((event) => event.type === "apb/mode" && MODES.includes(event.data?.mode));
-}
 
 /**
  * 将模式对应的 Host 权限预设应用到会话，即使模式本身没有变化也会执行。
@@ -71,101 +47,87 @@ function syncPermission(ctx, session, mode) {
 }
 
 /**
- * 从会话事件中折叠出当前会话自己的 agent preset 选择。
- * @param {Array<{type: string, data?: object}>} events 会话事件列表。
+ * 将已经选择 APB preset 的会话初始化到当前模式及其权限。
+ * @param {object} ctx Cordis Host 上下文。
+ * @param {object} session 要同步权限的会话对象。
+ * @returns {void}
+ */
+/**
+ * 从会话历史中折叠出当前会话自己的 agent preset 选择。
+ *
+ * 预设既可能记录为 `agent-preset/selected` 事件（会话中途切换预设），也可能只写
+ * 在创建时不可变的 `session.header.agentPreset`（初始组合）。`resolveSessionPreset`
+ * 的语义是事件优先、header 兜底；本函数与其保持一致，否则新建会话（header 带
+ * apb-coding 但尚无事件）会被误判为未启用 APB。
+ * @param {object|null|undefined} session 会话对象，读取其 `events` 与 `header`。
  * @returns {string|undefined} 最后一次选择的预设标识；尚未选择时返回 undefined。
  */
-function foldPreset(events) {
-	let preset;
-	for (const event of events) {
-		if (event.type === "agent-preset/selected" && typeof event.data?.agentPreset === "string") preset = event.data.agentPreset;
+function foldPreset(session) {
+	let preset = session?.header?.agentPreset;
+	const events = session?.events;
+	if (Array.isArray(events)) {
+		for (const event of events) {
+			if (event.type === "agent-preset/selected" && typeof event.data?.agentPreset === "string") preset = event.data.agentPreset;
+		}
 	}
 	return preset;
 }
 
 /**
- * 返回当前模式对应的系统提示词区段；`ask` 默认不增加额外提示。
+ * 返回模型可见的当前 APB 模式运行时上下文。
  * @param {"ask"|"plan"|"build"} mode APB 模式标识。
- * @returns {string} 要注入系统提示词的中文规则文本。
+ * @returns {string} 仅描述当前状态、不重复静态模式规则的上下文文本。
  */
-function modeSection(mode) {
-	switch (mode) {
-		case "plan":
-			return `[APB] 规划模式：当前仅允许只读操作。使用不会改变仓库的读取、搜索、静态分析和检查来了解项目。请产出可直接执行的完整实施计划，覆盖目标、成功标准、入口、文件级修改、模块顺序、边界情况、失败模式、测试和验证方式。不得编辑文件、修改配置、运行会重写内容的格式化器或生成器、提交代码，或以其他方式实施计划。在回复中给出计划，并等待用户通过 /apb build 或 APB 按钮显式切换；仅有对话中的“同意”不构成实施授权。`;
-		case "build":
-			return "[APB] 构建模式：执行已经确认的对话或计划；当前允许写入文件。";
-		default:
-			return "";
-	}
+function modeContext(mode) {
+	const instructions = {
+		ask: "Discuss with the user to clarify the goal, constraints, boundaries, and acceptance criteria. Do not create a formal implementation plan or modify files.",
+		plan: "Use the latest existing plan together with all Ask clarifications made after it to produce an updated complete plan. If no plan exists, create one from the accumulated Ask discussion. Do not implement changes.",
+		build: "Implement the latest plan. If no plan exists, implement directly from the accumulated Ask clarifications. Run appropriate verification and distinguish completed, unrun, and blocked checks."
+	};
+	return `Current APB mode: ${mode}. ${instructions[mode]}`;
 }
 
 /**
  * APB Host 服务入口。
  *
- * 该服务负责记录会话模式、每次选择时同步 Host 权限、注册模式提示词、
- * 注册 `apbMode` 客户端投影以及注册 `/apb` 命令。UI 只通过已经提交的
- * 投影观察状态，不维护另一份实时镜像。
+ * 该服务负责保存进程内会话模式、每次选择时同步 Host 权限、注册模式上下文、
+ * 提供客户端 Remote 接口以及注册 `/apb` 命令。UI 每次从本服务读取权威值。
  *
- * 输入：Cordis 上下文及其会话/权限/命令/投影服务。
- * 输出：`get`/`set` 两个服务方法，以及上述提示词、投影和命令副作用。
+ * 输入：Cordis 上下文及其会话、权限、系统提示词和命令服务。
+ * 输出：进程内状态方法、Remote 方法，以及上述上下文和命令副作用。
  */
-var ApbModeController = class extends Service {
+var ApbModeController = class extends TypertRemoteService {
 	static inject = ["systemPrompt"];
-	/** 注册 APB Host 服务及其会话入口、提示词出口、投影出口和命令出口。 */
+	/** @type {WeakMap<object, "ask"|"plan"|"build">} */
+	modes = new WeakMap();
+	/** 注册 APB Host 服务及其会话入口、上下文出口、Remote 出口和命令出口。 */
 	constructor(ctx) {
 		super(ctx, "apbMode");
-		// 会话入口：首次启动、恢复或派生 APB 会话时，先把真实权限同步好。
+		// 会话入口：新建、恢复或重新挂载 APB 会话时，都从 ask 和只读权限开始。
 		ctx.on("agent/session-start", ({ agent }) => {
 			const session = agent.session;
-			if (foldPreset(session.events) !== APB_PRESET) return;
-
-			const mode = foldMode(session.events);
-			// permissionPresets 会在创建会话时固定自己的默认值。APB 必须在第一轮
-			// 模型调用前重新校准它；恢复和派生会话也走这里，并记录隐式 ask 状态，
-			// 供之后重放事件时使用。
-			syncPermission(ctx, session, mode);
-			if (!hasLoggedMode(session.events)) session.append("apb/mode", { mode });
+			if (foldPreset(session) !== APB_PRESET) return;
+			this.reset(session);
 		});
-		// 提示词出口：每次组装系统提示词时，根据会话事件计算当前模式规则。
-		ctx.systemPrompt.section({
-			name: "apb:policy",
+		// 运行中的会话切入 APB preset 时，不会重新触发 session-start；监听
+		// preset 选择事件，立即把左侧 Host 权限校准到当前 APB 模式。
+		ctx.on("session/event", (session, event) => {
+			if (event.type !== "agent-preset/selected") return;
+			if (event.data?.agentPreset === APB_PRESET) this.reset(session);
+			else this.modes.delete(session);
+		});
+		// 运行时上下文出口：静态 persona 保持不变，只注入当前模式及其行动目标。
+		ctx.systemPrompt.context({
+			name: "apb:mode",
 			order: 90,
 			text: (context) => {
 				if (context.agent === void 0) return "";
-				return modeSection(foldMode(context.agent.session.events));
+				if (foldPreset(context.agent.session) !== APB_PRESET) return "";
+				return modeContext(this.modeOf(context.agent.session));
 			}
 		});
-		// 投影出口：将 Host 会话状态转换成客户端可消费的 enabled/mode 视图。
-		ctx.inject(["sessionProjections"], (projectionCtx) => {
-			const stateSchema = z.object({
-				mode: z.enum(MODES),
-				preset: z.string().nullable()
-			});
-			const viewSchema = z.object({
-				enabled: z.boolean(),
-				mode: z.enum(MODES)
-			});
-			projectionCtx.sessionProjections.register({
-				key: "apbMode",
-				stateSchema,
-				init: () => ({ mode: DEFAULT_MODE, preset: null }),
-				apply: (state, event) => {
-					if (event.type === "apb/mode") return { ...state, mode: event.data.mode };
-					if (event.type === "agent-preset/selected") return { ...state, preset: event.data.agentPreset ?? null };
-					return state;
-				},
-				wire: {
-					viewSchema,
-					view: (state) => ({
-						enabled: state.preset === APB_PRESET,
-						mode: state.mode
-					})
-				},
-				stateVersion: 1
-			});
-		});
-		// 命令入口：接收 `/apb` 的文本参数；出口是成功/错误反馈，并在需要时
-		// 写入模式事件和同步真实权限。
+		// 命令入口：接收 `/apb` 的文本参数；出口是成功/错误反馈，并同步
+		// 当前进程内模式和真实权限，不写入 APB 私有 session event。
 		ctx.inject(["commands"], (commandCtx) => {
 			commandCtx.commands.register({
 				name: "apb",
@@ -174,7 +136,10 @@ var ApbModeController = class extends Service {
 				handler: ({ agent, rawInput }) => {
 					const arg = rawInput.trim();
 					const session = agent.session;
-					const current = foldMode(session.events);
+					if (foldPreset(session) !== APB_PRESET) {
+						return { kind: "error", text: "当前会话未启用 APB 渐进编码助手。" };
+					}
+					const current = this.modeOf(session);
 					if (arg === "" || arg === "status") {
 						const permission = ctx.get("permissionPresets");
 						const effective = permission?.current(session.events) ?? "unavailable";
@@ -201,8 +166,7 @@ var ApbModeController = class extends Service {
 							text: `APB 模式未变化，仍为 ${current}；权限预设已重新同步为 ${MODE_PERMISSION[current]}。`
 						};
 					}
-					syncPermission(ctx, session, target);
-					session.append("apb/mode", { mode: target });
+					this.set(agent, target);
 					return {
 						kind: "success",
 						text: `APB 模式：${current} -> ${target}（权限预设：${MODE_PERMISSION[target]}）。`
@@ -211,13 +175,23 @@ var ApbModeController = class extends Service {
 			});
 		});
 	}
+	/** 将一个活动会话重置为 ask，并立即同步只读权限。 */
+	reset(session) {
+		this.modes.set(session, DEFAULT_MODE);
+		syncPermission(this.ctx, session, DEFAULT_MODE);
+		return DEFAULT_MODE;
+	}
+	/** 读取进程内模式；尚未初始化时安全回退到 ask。 */
+	modeOf(session) {
+		return this.modes.get(session) ?? DEFAULT_MODE;
+	}
 	/**
 	 * 服务出口：读取指定 Agent 会话事件折叠出的当前模式。
 	 * @param {object} agent 要读取的 Agent。
 	 * @returns {"ask"|"plan"|"build"} 当前生效的 APB 模式。
 	 */
 	get(agent) {
-		return foldMode(agent.session.events);
+		return this.modeOf(agent.session);
 	}
 	/**
 	 * 服务出口：立即为指定 Agent 选择模式，行为等价于 `/apb ask|plan|build`。
@@ -230,14 +204,25 @@ var ApbModeController = class extends Service {
 	set(agent, mode) {
 		if (!MODES.includes(mode)) throw new Error(`unknown APB mode "${mode}" (available: ${MODES.join(", ")})`);
 		const session = agent.session;
-		const current = foldMode(session.events);
+		if (foldPreset(session) !== APB_PRESET) throw new Error("current session does not use the apb-coding preset");
 		syncPermission(this.ctx, session, mode);
-		if (mode !== current) {
-			session.append("apb/mode", { mode });
-		}
+		this.modes.set(session, mode);
 		return mode;
+	}
+	/** 返回客户端所需的瞬时 APB 状态。 */
+	remoteGet(agent) {
+		const enabled = foldPreset(agent.session) === APB_PRESET;
+		return { enabled, mode: enabled ? this.get(agent) : DEFAULT_MODE };
+	}
+	/** 从客户端循环到下一模式，并返回切换后的权威状态。 */
+	remoteCycle(agent) {
+		if (foldPreset(agent.session) !== APB_PRESET) return { enabled: false, mode: DEFAULT_MODE };
+		const current = this.get(agent);
+		const target = MODES[(MODES.indexOf(current) + 1) % MODES.length];
+		this.set(agent, target);
+		return { enabled: true, mode: target };
 	}
 };
 //#endregion
 // 对外导出常量、纯函数和 Host 服务；`default` 兼容 Cordis 的默认服务加载方式。
-export { APB_PRESET, DEFAULT_MODE, MODES, MODE_PERMISSION, ApbModeController, ApbModeController as default, foldMode, hasLoggedMode, modeSection, syncPermission };
+export { APB_PRESET, DEFAULT_MODE, MODES, MODE_PERMISSION, ApbModeController, ApbModeController as default, foldPreset, modeContext, syncPermission };

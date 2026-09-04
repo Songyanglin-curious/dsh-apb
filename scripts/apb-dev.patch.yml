@@ -1,0 +1,9 @@
+# APB daily-development overlay. The preset source remains in this repository;
+# dev.ps1 supplies APB_DEV_PRESET_ROOT before DSH starts.
+- id: agent-presets
+  config:
+    default: apb-coding
+    roots:
+      - path: !!js process.env.APB_DEV_PRESET_ROOT
+        trust: user
+    includeUserRoot: true

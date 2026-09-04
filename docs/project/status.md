@@ -1,6 +1,6 @@
 # 项目状态
 
-更新日期：2026-09-03。
+更新日期：2026-09-04。
 
 ## 总体结论
 
@@ -18,7 +18,11 @@
 - 自定义复制式 `install.ps1` 已删除。
 - Bundle 安装、重复安装、组合输出和卸载已在隔离 `DSH_HOME` 中验证。
 - Tarball 内容通过 `pnpm pack --dry-run` 检查；Node 源码通过语法检查。
-- 提供隔离 `DSH_HOME` 的一键调试脚本，不修改正式 DSH 用户目录。
+- 提供独立 `apb-dev` Profile 的仓库链接开发入口；Client 使用 DSH 内建 HMR，Host、
+  bundle patch 和 preset 变化触发整进程重启。
+- `apb-dev` 的 Profile 初始化、仓库 link、preset 组合、Web/Client 资源加载、Client
+  rebuilt 事件和 Host 自动重启已在 DSH `0.1.1-rc.2` 上验证；日常 `web` Profile 未变。
+- 保留隔离 `DSH_HOME` 的 tarball 发布包验证脚本，不修改正式 DSH 用户目录。
 
 ## 未完成或未验证
 
@@ -27,13 +31,16 @@
 | preset 引用统一包与目录重构 | 代码已完成，冷启动 E2E 未验证 | 旧路径/旧包名已移除；真实 preset 挂载仍需验证 |
 | 新会话 ask 权限初始化 | 代码已完成，E2E 未验证 | 已在 `agent/session-start` 校准；真实 file policy 仍需验证 |
 | 同模式权限重新同步 | 代码已完成，E2E 未验证 | `/apb` 与 controller 均改为幂等设置权限 |
-| APB 与有效权限一致性 | 未完成 | 外部权限改档后的自动纠正策略仍未定义 |
+| APB preset 切入时权限同步 | 代码已完成，E2E 未验证 | 已监听 `agent-preset/selected`；真实左侧权限控件刷新仍需验证 |
 | APB plan 单一状态源 | 代码已完成，E2E 未验证 | preset 内原生 plan 已移除，DSH Web 后置 patch 已禁用 dsh-base 的 `plan-mode`；真实 plan/build 交互仍需验证 |
+| 模式与系统提示词分离 | 代码已完成，E2E 未验证 | 模式定义保持静态，每次请求由 runtime context 注入当前模式及行动目标；真实轨迹仍需验证 |
+| APB 瞬时模式状态 | 代码与浏览器链路已验证 | Host WeakMap 为唯一状态源；`./typert` 静态 artifact 已消除 `link:` 环境下的 Remote 404；完整 get RPC 与浏览器无错误加载已通过；Host 重启后同一旧会话回到 ask/read-only |
 | UI 错误与并发保护 | 未完成 | 切换失败无可见反馈，快捷键可重复提交 |
 | 自动化测试 | 未完成 | 当前仓库没有测试文件或持续集成 |
-| 真实 DSH host 挂载 | 未验证 | 未证明 preset、service realm 和 client module 全链路可用 |
-| 浏览器交互 | 未验证 | chip、Alt+M、错误展示未做端到端验收 |
-| resume/fork 与权限恢复 | 未验证 | 仅从 logged 状态设计推断，缺少运行证据 |
+| 开发调试链路 | 已验证到模块加载与更新事件 | 浏览器内 Client 卸载/重挂仍未自动验收 |
+| 真实 DSH host 挂载 | 开发与隔离 profile 已验证 | `link:` 下 Host Remote 路由和 client module 可加载，tarball 内容包含 Typert artifact；正式用户 profile 未改动 |
+| 浏览器交互 | 部分验证 | chip 的 ask → plan → build、权限联动和刷新已通过；Alt+M 与失败提示尚未做端到端验收 |
+| resume/fork 与权限重置 | 部分验证 | Host 重启后恢复同一会话已回 ask/read-only；fork 尚未验证 |
 | ask/plan 沙箱拒写 | 未验证 | 核心安全承诺尚无端到端证据 |
 
 ## 当前可接受的使用范围
